@@ -1,0 +1,23 @@
+name: thingspanel-notification-smtp-local
+
+services:
+  smtp-plugin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: thingspanel/notification-smtp:local
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      NOTIFICATION_PLUGIN_LISTEN: 0.0.0.0:5005
+    ports:
+      - "127.0.0.1:5005:5005"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
