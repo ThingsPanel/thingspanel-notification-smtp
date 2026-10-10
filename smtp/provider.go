@@ -38,9 +38,6 @@ type Provider struct {
 // they also fall in an operator-supplied network range; metadata/link-local
 // addresses remain prohibited.
 func New(allowedServers, allowedCIDRs []string) (*Provider, error) {
-	if len(allowedServers) == 0 {
-		return nil, errors.New("SMTP server allowlist is empty")
-	}
 	var cidrs []net.IPNet
 	for _, raw := range allowedCIDRs {
 		p, err := parsePrefix(raw)
@@ -90,6 +87,9 @@ func (p *Provider) Manifest() sdk.Manifest {
 }
 
 func (p *Provider) Validate(_ context.Context, req sdk.ValidateRequest) sdk.ValidateResult {
+	if p == nil || len(p.servers) == 0 {
+		return sdk.ValidateResult{Valid: false, Errors: []sdk.FieldError{fe("service", "configuration_required", "The email sending service has not been configured by an operator.")}}
+	}
 	var errs []sdk.FieldError
 	if !keys(req.Config, "host", "port", "from_email", "from_password", "ssl") {
 		errs = append(errs, fe("config", "unknown_field", "Configuration contains unsupported fields."))
@@ -115,13 +115,13 @@ func (p *Provider) Validate(_ context.Context, req sdk.ValidateRequest) sdk.Vali
 	return sdk.ValidateResult{Valid: len(errs) == 0, Errors: errs}
 }
 func (p *Provider) Health(context.Context) error {
-	if len(p.servers) == 0 {
-		return errors.New("SMTP server allowlist is empty")
-	}
 	return nil
 }
 
 func (p *Provider) Send(ctx context.Context, req sdk.SendRequest) (sdk.SendResult, error) {
+	if p == nil || len(p.servers) == 0 {
+		return reject(req.DeliveryID, "configuration_required", "The email sending service has not been configured by an operator."), nil
+	}
 	if req.Channel != "email" || req.Recipient.Kind != "email" || req.Content.Kind != "text" {
 		return reject(req.DeliveryID, "unsupported_request", "SMTP accepts one text email target."), nil
 	}

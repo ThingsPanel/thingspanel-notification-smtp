@@ -91,6 +91,30 @@ func TestSMTPInvalidAddressAndUnapprovedHostDoNotDial(t *testing.T) {
 	}
 }
 
+func TestUnconfiguredServiceStartsHealthyAndNeverAttemptsSMTP(t *testing.T) {
+	provider, err := New(nil, nil)
+	if err != nil {
+		t.Fatalf("empty operator allowlist should start the preinstalled service: %v", err)
+	}
+	if err := provider.Health(context.Background()); err != nil {
+		t.Fatalf("unconfigured service should be healthy for manifest/bootstrap: %v", err)
+	}
+	manifest := provider.Manifest()
+	if manifest.PluginID != "thingspanel.smtp" || manifest.Capabilities.DeliveryReceipts {
+		t.Fatalf("unexpected manifest: %+v", manifest)
+	}
+
+	validation := provider.Validate(context.Background(), sdk.ValidateRequest{Config: map[string]any{}})
+	if validation.Valid || len(validation.Errors) != 1 || validation.Errors[0].Code != "configuration_required" {
+		t.Fatalf("unconfigured validation must fail clearly: %+v", validation)
+	}
+
+	result, err := provider.Send(context.Background(), smtpRequest("smtp.example.test", "2525", false))
+	if err != nil || result.Outcome != "rejected" || result.Error == nil || result.Error.Code != "configuration_required" || result.Error.Retryable {
+		t.Fatalf("unconfigured send must be explicitly rejected without retry: %+v err=%v", result, err)
+	}
+}
+
 type smtpFixture struct {
 	port        string
 	roots       *x509.CertPool
